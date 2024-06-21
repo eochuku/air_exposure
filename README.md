@@ -1,4 +1,4 @@
-# Extrapolating air exposure time from temperature log data
+# Extrapolating air exposure time from temperature log data (Method)
 This repository contains codes and data for extrapolating air exposure time from temperature log data.
 
 ## Script
