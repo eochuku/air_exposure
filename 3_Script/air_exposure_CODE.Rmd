@@ -1,0 +1,476 @@
+---
+title: "Extrapolating air exposure time from temperature log data"
+author: "Ernest O. Chuku"
+date: "2024-06-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list = ls()) 
+```
+
+```{r Estuaries}
+library(githubr)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+```
+
+# Bonus Code Chunk: Load CSV files from GitHub (USE ONLY IF APPLYING OUR DATA)
+
+```{r}
+# Load CSV files from GitHub
+Temp_Light_HI_1_21501149 <- "https://raw.githubusercontent.com/eochuku/air_exposure/main/1_Validation_data/Supplementary_Data_1_Temp_Light_HI_1_21501149.csv"
+Temp_Light_HI_2_21501155 <- "https://raw.githubusercontent.com/eochuku/air_exposure/main/1_Validation_data/Supplementary_Data_2_Temp_Light_HI_2_21501155.csv"
+Temp_Light_LI_1_21513450 <- "https://raw.githubusercontent.com/eochuku/air_exposure/main/1_Validation_data/Supplementary_Data_3_Temp_Light_LI_1_21513450.csv"
+Temp_Light_LI_2_21513502 <- "https://raw.githubusercontent.com/eochuku/air_exposure/main/1_Validation_data/Supplementary_Data_4_Temp_Light_LI_2_21513502.csv"
+Temp_Light_SUB_1_21513523 <- "https://raw.githubusercontent.com/eochuku/air_exposure/main/1_Validation_data/Supplementary_Data_5_Temp_Light_SUB_1_21513523.csv"
+Temp_Light_SUB_2_21513492 <- "https://raw.githubusercontent.com/eochuku/air_exposure/main/1_Validation_data/Supplementary_Data_6_Temp_Light_SUB_2_21513492.csv"
+```
+
+# Code Chunk 1. Read the data frames into R environment (NB: here, the data frames are being called from the GitHub data sources above). Use your own data if available.
+
+```{r}
+df_Temp_HI1 <- read.csv(Temp_Light_HI_1_21501149)
+df_Temp_HI2 <- read.csv(Temp_Light_HI_2_21501155)
+df_Temp_LI1 <- read.csv(Temp_Light_LI_1_21513450)
+df_Temp_LI2 <- read.csv(Temp_Light_LI_2_21513502)
+df_Temp_SUB1 <- read.csv(Temp_Light_SUB_1_21513523)
+df_Temp_SUB2 <- read.csv(Temp_Light_SUB_2_21513492)
+```
+
+# Code Chunk 2. Merge replicate data frames horizontally and find average temperatures
+
+```{r}
+#Convert date_time column to machine date-time format
+df_Temp_SUB1$date_time <- as.POSIXct(df_Temp_SUB1$date_time, format = "%m/%d/%Y %H:%M", tz = "Australia/Tasmania")
+df_Temp_SUB2$date_time <- as.POSIXct(df_Temp_SUB2$date_time, format = "%m/%d/%Y %H:%M", tz = "Australia/Tasmania")
+
+#Merge temperature data from the data frames side by side based on 'date_time'
+df_SUB <- merge(df_Temp_SUB1[, c('date_time', 'exposure', 'temp')],
+               df_Temp_SUB2[, c('date_time', 'exposure', 'temp')],
+                   by = c('date_time', 'exposure'),
+                   all = TRUE)
+
+#Add a new average temperature column 'temp' calculated as a row mean from temp.x and temp.y
+df_SUB$temp <- rowMeans(df_SUB[, c("temp.x", "temp.y")], na.rm = TRUE)
+
+#Rename the levels for exposure to make it short
+df_SUB$exposure <- as.factor(df_SUB$exposure)
+levels(df_SUB$exposure) <- c("SUB")
+```
+
+```{r}
+#Convert date_time column to machine date-time format
+df_Temp_LI1$date_time <- as.POSIXct(df_Temp_LI1$date_time, format = "%m/%d/%Y %H:%M", tz = "Australia/Tasmania")
+df_Temp_LI2$date_time <- as.POSIXct(df_Temp_LI2$date_time, format = "%m/%d/%Y %H:%M", tz = "Australia/Tasmania")
+
+#Merge the data frames side by side based on 'date_time'
+df_LI <- merge(df_Temp_LI1[, c('date_time', 'exposure', 'temp')],
+               df_Temp_LI2[, c('date_time', 'exposure', 'temp')],
+                   by = c('date_time', 'exposure'),
+                   all = TRUE)
+
+#Add a new average temperature column 'temp' calculated as a row mean from temp.x and temp.y
+df_LI$temp <- rowMeans(df_LI[, c("temp.x", "temp.y")], na.rm = TRUE)
+
+#Rename the levels for exposure to make it short
+df_LI$exposure <- as.factor(df_LI$exposure)
+levels(df_LI$exposure) <- c("LI")
+```
+
+```{r}
+#Convert date_time column to machine date-time format
+df_Temp_HI1$date_time <- as.POSIXct(df_Temp_HI1$date_time, format = "%m/%d/%Y %H:%M", tz = "Australia/Tasmania")
+df_Temp_HI2$date_time <- as.POSIXct(df_Temp_HI2$date_time, format = "%m/%d/%Y %H:%M", tz = "Australia/Tasmania")
+
+#Merge the data frames side by side based on 'date_time'
+df_HI <- merge(df_Temp_HI1[, c('date_time', 'exposure', 'temp')],
+               df_Temp_HI2[, c('date_time', 'exposure', 'temp')],
+                   by = c('date_time', 'exposure'),
+                   all = TRUE)
+
+#Add a new average temperature column 'temp' calculated as a row mean from temp.x and temp.y
+df_HI$temp <- rowMeans(df_HI[, c("temp.x", "temp.y")], na.rm = TRUE)
+
+#Rename the levels for exposure to make it short
+df_HI$exposure <- as.factor(df_HI$exposure)
+levels(df_HI$exposure) <- c("HI")
+```
+
+# Code Chunk 3. Join merged data frames vertically, create a new date column, and remove superfluous columns
+
+```{r}
+#Join data vertically
+df_Temp <- rbind(df_SUB, df_LI, df_HI)
+
+#Convert date_time to date
+df_Temp$date <- as.Date(df_Temp$date_time, tz = "Australia/Tasmania")
+#df_Temp$date2 <- as.POSIXct(df_Temp$date_time, format = "%m/%d/%Y")
+
+#Remove date_time column
+#df_Temp <- dplyr::select(df_Temp, -date_time)
+df_Temp
+```
+
+```{r}
+str(df_Temp)
+```
+
+# Code Chunk 4. Cross-verify daily temperature log counts
+
+## First Cross-Validation
+```{r fig.height=3, fig.width=12}
+#Summarise log counts
+summary_logCount <- df_Temp %>%
+  group_by(exposure, date) %>%
+  summarize(logCount = n())
+
+summary_logCount
+
+#Make a validity plot
+plot1 <- summary_logCount %>%
+  mutate(valid_logCount = ifelse(logCount <0 | logCount >288 | is.na(logCount) == TRUE, FALSE, TRUE)) %>%
+  ggplot(mapping = aes(x = date,  y = logCount, col = valid_logCount)) +
+  geom_line(aes(group = 1), size = 1) +
+  geom_hline(yintercept = c(0, 298), color = "blue") +
+  geom_rug(sides = "b", data = . %>% filter(valid_logCount == FALSE)) +
+  facet_grid(~exposure, ncol(3)) +
+  ggtitle("First cross-verification (before cleaning)") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 11)) +
+  theme(axis.text.x = element_text(size=10, angle = 90, hjust = 1, vjust = 0.5)) +
+  theme(strip.text.x = element_text(size = 11, color = "black", face = "bold")) +
+  theme(strip.text.y = element_text(size = 11, color = "black", face = "bold")) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  scale_color_manual(values = c("TRUE" = "cyan4", "FALSE" = "brown2"))
+
+plot1
+```
+
+# Code Chunk 5. Filter data to include `only 5-minutely` data and remove duplicate logs at specific times
+
+```{r}
+# Function to check if a datetime falls on a 5-minute interval from 00:00:00
+is_5_min_interval <- function(time) {
+  minute(time) %% 5 == 0 & second(time) == 0
+}
+
+# Filter the dataset
+df_Temp <- df_Temp %>%
+  filter(is_5_min_interval(date_time))
+```
+
+## Second Cross-Validation
+```{r fig.height=3, fig.width=12}
+#Summarise log counts
+summary_logCount <- df_Temp %>%
+  group_by(exposure, date) %>%
+  summarize(logCount = n())
+
+summary_logCount
+
+#Make a validity plot
+plot2 <- summary_logCount %>%
+  mutate(valid_logCount = ifelse(logCount <0 | logCount >288 | is.na(logCount) == TRUE, FALSE, TRUE)) %>%
+  ggplot(mapping = aes(x = date,  y = logCount, col = valid_logCount)) +
+  geom_line(aes(group = 1), size = 1) +
+  geom_hline(yintercept = c(0, 292), color = "blue") +
+  geom_rug(sides = "b", data = . %>% filter(valid_logCount == FALSE)) +
+  facet_grid(~exposure, ncol(3)) +
+  ggtitle("Second cross-verification (after cleaning 1-minutely data cases)") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 11)) +
+  #theme(axis.text.x = element_text(size=10, angle = 90, hjust = 1, vjust = 0.5)) +
+  theme(strip.text.x = element_text(size = 11, color = "black", face = "bold")) +
+  theme(strip.text.y = element_text(size = 11, color = "black", face = "bold")) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  scale_color_manual(values = c("TRUE" = "cyan4", "FALSE" = "brown2"))
+
+plot2
+```
+
+# Code Chunk 5. Filter data to include only 5-minutely data and `remove duplicate logs` at specific times
+
+```{r}
+#Chek for duplicates
+duplicates <- df_Temp %>%
+  group_by(exposure) %>%
+  filter(duplicated(date_time))
+
+print(duplicates)
+
+#Remove duplicates 
+df_Temp <- df_Temp %>%
+  group_by(exposure) %>%
+  distinct(date_time, .keep_all = TRUE) %>%
+  ungroup()
+```
+
+## Check duplicates again (`duplicates` data frame should contain 0 data)
+```{r}
+duplicates <- df_Temp %>%
+  group_by(exposure) %>%
+  filter(duplicated(date_time))
+```
+
+## Third Cross-Validation
+```{r fig.height=4, fig.width=12}
+#Summarise log counts
+summary_logCount <- df_Temp %>%
+  group_by(exposure, date) %>%
+  summarize(logCount = n())
+
+summary_logCount
+
+#Make a validity plot
+plot3 <- summary_logCount %>%
+  mutate(valid_logCount = ifelse(logCount <0 | logCount >288 | is.na(logCount) == TRUE, FALSE, TRUE)) %>%
+  ggplot(mapping = aes(x = date,  y = logCount, col = valid_logCount)) +
+  geom_line(aes(group = 1), size = 1) +
+  geom_hline(yintercept = c(0, 292), color = "blue") +
+  geom_rug(sides = "b", data = . %>% filter(valid_logCount == FALSE)) +
+  facet_grid(~exposure, ncol(3)) +
+  ggtitle("Third cross-verification (after cleaning multiplicate data)") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 11)) +
+  theme(axis.text.x = element_text(size=10, angle = 90, hjust = 1, vjust = 0.5)) +
+  theme(strip.text.x = element_text(size = 11, color = "black", face = "bold")) +
+  theme(strip.text.y = element_text(size = 11, color = "black", face = "bold")) +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  scale_color_manual(values = c("TRUE" = "cyan4", "FALSE" = "brown2"))
+
+plot3
+```
+
+```{r fig.height=10, fig.width=12}
+library(ggpubr)
+combplot <- ggarrange(plot1, plot2, plot3,
+                      nrow = 3,
+                      heights = c(3, 3, 3.7),
+                      common.legend = TRUE,  # Use a common legend
+                      legend = "right"
+                      )
+
+combplot
+```
+
+## Bonus Code Chunk: Save validity plot with specific dimensions
+```{r}
+# Specify the output file path
+CrossVal <- "CrossVal.tif"
+# Save the combined plot as a TIFF file with 300 DPI and specified size
+ggsave(CrossVal, plot = combplot, width = 10, height = 8, dpi = 300, units = "in", device = "tiff")
+```
+
+# Code Chunk 6. Extract daily minimum and maximum (range) temperatures at tidal levels
+
+## Subtidal 
+```{r}
+#Create sub-sample of the data by tidal level; here, subtidal (SUB). 
+#Aggregate temperature data by date, and identify the minimum and maximum values for each day
+range_SUB <- df_Temp[df_Temp$exposure == 'SUB', ] %>%
+  aggregate(temp ~ date, FUN = function(x) c(min = min(x), max = max(x)))
+
+# Rename the min and max temp columns in `range_SUB`
+# Extract the 'temp' column
+MinMax <- as.data.frame(range_SUB$temp)
+
+# Create new columns to rename  'Smin' and 'Smax'
+range_SUB$SUBmin <- MinMax$min
+range_SUB$SUBmax <- MinMax$max
+
+# Remove the original 'temp' column if needed
+range_SUB$temp <- NULL
+
+# Display the updated column names and the modified data frame
+print(names(range_SUB))
+```
+
+## Hight Intertidal
+
+```{r}
+#Create sub-sample of the data by tidal level; here, subtidal (SUB). 
+#Aggregate temperature data by date, and identify the minimum and maximum values for each day
+range_HI <- df_Temp[df_Temp$exposure == 'HI', ] %>%
+  aggregate(temp ~ date, FUN = function(x) c(min = min(x), max = max(x)))
+
+# Rename the min and max temp columns in `range_HI`
+# Extract the 'temp' column
+MinMax <- as.data.frame(range_HI$temp)
+
+# Create new columns 'Smin' and 'Smax'
+range_HI$HImin <- MinMax$min
+range_HI$HImax <- MinMax$max
+
+# Remove the original 'temp' column if needed
+range_HI$temp <- NULL
+
+# Display the updated column names and the modified data frame
+print(names(range_HI))
+```
+
+## Low Intertidal
+
+```{r}
+#Create sub-sample of the data by tidal level; here, subtidal (SUB). 
+#Aggregate temperature data by date, and identify the minimum and maximum values for each day
+range_LI <- df_Temp[df_Temp$exposure == 'LI', ] %>%
+  aggregate(temp ~ date, FUN = function(x) c(min = min(x), max = max(x)))
+
+# Rename the min and max temp columns in `range_LI`
+# Extract the 'temp' column
+MinMax <- as.data.frame(range_LI$temp)
+
+# Create new columns 'Smin' and 'Smax'
+range_LI$LImin <- MinMax$min
+range_LI$LImax <- MinMax$max
+
+# Remove the original 'temp' column if needed
+range_LI$temp <- NULL
+
+# Display the updated column names and the modified data frame
+print(names(range_LI))
+```
+
+# Code Chunk 7. Count temperature logs in ambient air when intertidal loggers are exposed
+
+## High intertidal
+
+```{r}
+# Count number of temperature logs for `HI` BELOW 'SUBmin'
+count_HIbeSUB <- df_Temp %>%
+  filter(exposure == 'HI') %>%
+  left_join(range_SUB, by = "date") %>%
+  group_by(date) %>%
+  summarize(HIbeSUB = sum(temp < SUBmin, na.rm = TRUE))
+
+# Count number of temperature logs for `HI` ABOVE 'SUBmax'
+count_HIabSUB <- df_Temp %>%
+  filter(exposure == 'HI') %>%
+  left_join(range_SUB, by = "date") %>%
+  group_by(date) %>%
+  summarize(HIabSUB = sum(temp > SUBmax, na.rm = TRUE))
+
+# Count number of temperature logs for `HI` falling WITHIN THE RANGE 'SUBmin - SUBmax'
+count_HIeqSUB <- df_Temp %>%
+  filter(exposure == 'HI') %>%
+  left_join(range_SUB, by = "date") %>%
+  group_by(date) %>%
+  summarize(HIeqSUB = sum(temp >= SUBmin & temp <= SUBmax, na.rm = TRUE))
+```
+
+
+## Low intertidal
+
+```{r}
+# Count number of temperature logs for `LI` below 'Smin'
+count_LIbeSUB <- df_Temp %>%
+  filter(exposure == 'LI') %>%
+  left_join(range_SUB, by = "date") %>%
+  group_by(date) %>%
+  summarize(LIbeSUB = sum(temp < SUBmin, na.rm = TRUE))
+
+# Count number of temperature logs for `LI` above 'Smax'
+count_LIabSUB <- df_Temp %>%
+  filter(exposure == 'LI') %>%
+  left_join(range_SUB, by = "date") %>%
+  group_by(date) %>%
+  summarize(LIabSUB = sum(temp > SUBmax, na.rm = TRUE))
+
+# Count number of temperature logs for `LI` falling within the range 'Smin - Smax'
+count_LIeqSUB <- df_Temp %>%
+  filter(exposure == 'LI') %>%
+  left_join(range_SUB, by = "date") %>%
+  group_by(date) %>%
+  summarize(LIeqSUB = sum(temp >= SUBmin & temp <= SUBmax, na.rm = TRUE))
+```
+
+# Code Chunk 8. Bind daily log count results (exposed, submerged) and estimate total exposure time in minutes and hours
+
+```{r}
+# List of data frames
+Exp_list <- list(range_SUB,
+                 range_LI,
+                 range_HI,
+                 count_LIbeSUB,
+                 count_LIabSUB,
+                 count_LIeqSUB,
+                 count_HIbeSUB,
+                 count_HIabSUB,
+                 count_HIeqSUB)
+
+# Merge data frames by 'date'
+ExpSUMM <- Reduce(function(x, y) merge(x, y, by = "date", all = TRUE), Exp_list)
+
+#Check total daily counts against 288; add as new columns
+ExpSUMM$countLI <- ExpSUMM$LIbeSUB + ExpSUMM$LIabSUB + ExpSUMM$LIeqSUB
+ExpSUMM$countHI <- ExpSUMM$HIbeSUB + ExpSUMM$HIabSUB + ExpSUMM$HIeqSUB
+
+#Estimate total exposure time in minutes and add as new columns
+ExpSUMM$ExpLI_min <- ((ExpSUMM$LIbeSUB + ExpSUMM$LIabSUB) * 5)
+ExpSUMM$ExpHI_min <- ((ExpSUMM$HIbeSUB + ExpSUMM$HIabSUB) * 5)
+
+#Estimate total exposure time in hours and add as new columns
+ExpSUMM$ExpLI_hrs <- round(((ExpSUMM$LIbeSUB + ExpSUMM$LIabSUB) * 5) / 60, 1)
+ExpSUMM$ExpHI_hrs <- round(((ExpSUMM$HIbeSUB + ExpSUMM$HIabSUB) * 5) / 60, 1)
+
+ExpSUMM <- ExpSUMM[complete.cases(ExpSUMM), ]  # Remove rows with NA values
+
+
+print(ExpSUMM)
+```
+
+# Bosuns Code Chunk: Summarise monthly air exposure period
+
+```{r}
+
+daily_ExpSUMM <- ExpSUMM %>%
+  mutate(month = format(date, "%Y-%m"))
+
+
+monthly_ExpSUMM <- daily_ExpSUMM %>%
+  group_by(month) %>%
+  summarise(
+    #Low intertidal
+    mean_ExpLI = mean(ExpLI_hrs),
+    se_ExpLI = sd(ExpLI_hrs) / sqrt(n()),
+    min_ExpLI = min(ExpLI_hrs),
+    max_ExpLI = max(ExpLI_hrs),
+    median_ExpLI = median(ExpLI_hrs),
+    total_ExpLI = sum(ExpLI_hrs),
+    #High intertidal
+    mean_ExpHI = mean(ExpHI_hrs),
+    se_ExpHI = sd(ExpHI_hrs) / sqrt(n()),
+    min_ExpHI = min(ExpHI_hrs),
+    max_ExpHI = max(ExpHI_hrs),
+    median_ExpHI = median(ExpHI_hrs),
+    total_ExpHI = sum(ExpHI_hrs)
+  )
+
+print(monthly_ExpSUMM)
+```
+
+# Bonus Code Chunk: Export daily and monthly air exposure summaries as CSV
+
+```{r}
+# With cleaned data
+write.csv(monthly_ExpSUMM, "monthly_ExpSUMM_cleaned.csv", row.names = FALSE)
+write.csv(ExpSUMM, "ExpSUMM_cleaned.csv", row.names = FALSE)
+```
